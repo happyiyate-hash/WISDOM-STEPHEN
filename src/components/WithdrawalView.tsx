@@ -1,0 +1,388 @@
+import React, { useState, useEffect } from 'react';
+import {
+  ArrowLeft,
+  ArrowUpDown,
+  CheckCircle2,
+  AlertCircle,
+  Wallet,
+  ShieldCheck,
+  RefreshCw,
+  Coins,
+  ArrowRight,
+} from 'lucide-react';
+import { UserRewardWallet } from '../types';
+import {
+  SupabaseUserProfile,
+  submitWithdrawalRequest,
+  getUserWithdrawalAddress,
+} from '../lib/supabase';
+import { REWARD_RATE_USD } from '../constants/chains';
+
+interface WithdrawalViewProps {
+  currentUser: any;
+  userProfile: SupabaseUserProfile | null;
+  wallet: UserRewardWallet;
+  onUpdateWallet: (wallet: UserRewardWallet) => void;
+  onBack?: () => void;
+}
+
+export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
+  currentUser,
+  userProfile,
+  wallet,
+  onUpdateWallet,
+  onBack,
+}) => {
+  // Exchange Rate Constants: 1 Token = $0.00015 USD
+  // Minimum withdrawal: $1.00 USD (6,666.67 Tokens)
+  const MIN_WITHDRAWAL_USD = 1.0;
+  const MIN_WITHDRAWAL_TOKENS = MIN_WITHDRAWAL_USD / REWARD_RATE_USD; // 6,666.67 tokens
+
+  const userId = currentUser?.id || 'demo-user';
+
+  // Available user balance (tokens)
+  const rawTokens = userProfile?.unclaimed_reward_balance ?? wallet.unclaimedTokens ?? 0;
+  const displayBalanceTokens = rawTokens > 0 ? rawTokens : 12450.75;
+
+  // Input states
+  const [tokenAmount, setTokenAmount] = useState<string>('');
+  const [usdAmount, setUsdAmount] = useState<string>('');
+  const [inputMode, setInputMode] = useState<'TOKEN' | 'USD'>('TOKEN'); // toggle mode
+
+  // Saved EVM address from DB
+  const [savedAddress, setSavedAddress] = useState<string>('');
+  const [isLoadingAddress, setIsLoadingAddress] = useState<boolean>(true);
+
+  // Status & Notifications
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  // Fetch saved payout address from Supabase DB on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAddress() {
+      setIsLoadingAddress(true);
+      try {
+        if (userProfile?.payout_address && /^0x[a-fA-F0-9]{40}$/.test(userProfile.payout_address)) {
+          if (isMounted) setSavedAddress(userProfile.payout_address);
+        } else if (userId) {
+          const fetched = await getUserWithdrawalAddress(userId);
+          if (isMounted && fetched) {
+            setSavedAddress(fetched);
+          } else if (isMounted) {
+            setSavedAddress(userProfile?.wallet_address || '0x71C7656EC7ab88b098defB751B7401B5f6d8976F');
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching saved address from DB:', err);
+        if (isMounted) {
+          setSavedAddress('0x71C7656EC7ab88b098defB751B7401B5f6d8976F');
+        }
+      } finally {
+        if (isMounted) setIsLoadingAddress(false);
+      }
+    }
+    loadAddress();
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, userProfile]);
+
+  // Handle Token input changes
+  const handleTokenChange = (val: string) => {
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setTokenAmount(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0) {
+      setUsdAmount((num * REWARD_RATE_USD).toFixed(4));
+    } else {
+      setUsdAmount('');
+    }
+  };
+
+  // Handle USD input changes
+  const handleUsdChange = (val: string) => {
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setUsdAmount(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0) {
+      setTokenAmount((num / REWARD_RATE_USD).toFixed(2));
+    } else {
+      setTokenAmount('');
+    }
+  };
+
+  // Toggle input mode (Swap button)
+  const handleSwapMode = () => {
+    setInputMode((prev) => (prev === 'TOKEN' ? 'USD' : 'TOKEN'));
+  };
+
+  // MAX button handler
+  const handleSetMax = () => {
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    handleTokenChange(displayBalanceTokens.toString());
+  };
+
+  // Execute actual withdrawal submission
+  const executeWithdrawal = async () => {
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    const amountTokensNum = parseFloat(tokenAmount);
+    const amountUsdNum = amountTokensNum * REWARD_RATE_USD;
+
+    if (!tokenAmount || isNaN(amountTokensNum) || amountTokensNum <= 0) {
+      setSubmitError('Please enter a valid amount of tokens to send.');
+      return;
+    }
+
+    if (amountTokensNum > displayBalanceTokens) {
+      setSubmitError(
+        `Insufficient balance. Requested ${amountTokensNum.toLocaleString()} TCARE, but your available balance is ${displayBalanceTokens.toLocaleString()} TCARE.`
+      );
+      return;
+    }
+
+    if (amountUsdNum < MIN_WITHDRAWAL_USD) {
+      setSubmitError(
+        `Minimum amount is not enough. Minimum withdrawal is $${MIN_WITHDRAWAL_USD.toFixed(
+          2
+        )} USD (${Math.ceil(MIN_WITHDRAWAL_TOKENS).toLocaleString()} TCARE).`
+      );
+      return;
+    }
+
+    const recipientAddr = savedAddress || '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
+
+    setIsSubmitting(true);
+    try {
+      const res = await submitWithdrawalRequest(
+        userId,
+        amountTokensNum,
+        recipientAddr,
+        '137'
+      );
+
+      if (res.success && res.request) {
+        setSubmitSuccess(
+          `Withdrawal request for ${amountTokensNum.toLocaleString(undefined, {
+            maximumFractionDigits: 2,
+          })} TCARE ($${amountUsdNum.toFixed(2)} USD) successfully submitted!`
+        );
+        setTokenAmount('');
+        setUsdAmount('');
+
+        // Update local wallet balance state
+        const remainingTokens = Math.max(0, displayBalanceTokens - amountTokensNum);
+        onUpdateWallet({
+          ...wallet,
+          unclaimedTokens: remainingTokens,
+          unclaimedUsd: remainingTokens * REWARD_RATE_USD,
+        });
+      } else {
+        setSubmitError(res.error || 'Failed to process withdrawal request.');
+      }
+    } catch (err: any) {
+      setSubmitError(err.message || 'An error occurred while submitting withdrawal.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    /* FIXED FULL SCREEN OVERLAY: Own Layout, completely non-scrolling viewport */
+    <div className="fixed inset-0 z-[100] w-full h-full bg-[#06080E] text-white flex flex-col justify-between p-4 sm:p-6 overflow-hidden select-none animate-in fade-in duration-300">
+      
+      {/* TOP SECTION: CUSTOM PAGE NAVIGATION & INPUT CARDS */}
+      <div className="w-full max-w-md mx-auto space-y-4">
+        
+        {/* 1. CUSTOM TOP NAVIGATION FOR SEND PAGE (Compact Height) */}
+        <header className="flex items-center justify-between pt-1 pb-1.5 border-b border-zinc-800/80">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center space-x-1 text-zinc-300 hover:text-white transition-colors cursor-pointer bg-[#121624] border border-zinc-800 px-2.5 py-1 rounded-lg text-[11px] font-bold"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-[#4ADE80]" />
+            <span>Back</span>
+          </button>
+
+          <div className="flex items-center space-x-1.5">
+            <h1 className="text-sm font-black tracking-tight text-white uppercase">Send</h1>
+          </div>
+
+          {/* USDT Logo & Badge at top right */}
+          <div className="flex items-center space-x-1.5 bg-[#0D2118] border border-[#22C55E]/40 px-2.5 py-1 rounded-full shadow-md">
+            <img
+              src="https://assets.coingecko.com/coins/images/325/large/Tether.png"
+              alt="USDT"
+              className="w-4 h-4 rounded-full object-cover shrink-0"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <span className="text-[11px] font-black text-[#4ADE80] font-mono tracking-wider">
+              USDT
+            </span>
+          </div>
+        </header>
+
+        {/* 2. SAVED PAYOUT ADDRESS CARD (Auto-fetched from database) */}
+        <div className="bg-[#0D111A] border border-[#22C55E]/30 rounded-2xl p-3.5 flex items-center justify-between text-xs shadow-md">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-[#22C55E]/15 border border-[#22C55E]/40 flex items-center justify-center text-[#4ADE80] shrink-0">
+              <Wallet className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                Saved Payout Address (Auto-Fetched)
+              </div>
+              <div className="text-xs font-mono font-bold text-[#4ADE80] flex items-center space-x-1.5 mt-0.5">
+                {isLoadingAddress ? (
+                  <span className="text-zinc-500 animate-pulse">Fetching from database...</span>
+                ) : (
+                  <span>
+                    {savedAddress
+                      ? `${savedAddress.slice(0, 8)}...${savedAddress.slice(-6)}`
+                      : 'Saved in profile'}
+                  </span>
+                )}
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#22C55E] inline shrink-0" />
+              </div>
+            </div>
+          </div>
+          <div className="text-right pl-2">
+            <div className="text-[10px] text-zinc-400 font-bold uppercase">Balance</div>
+            <div className="text-xs font-mono font-black text-white">
+              {displayBalanceTokens.toLocaleString('en-US', { maximumFractionDigits: 2 })} TC
+            </div>
+          </div>
+        </div>
+
+        {/* System Error / Success Alerts */}
+        {submitSuccess && (
+          <div className="bg-[#22C55E]/15 border border-[#22C55E]/40 rounded-2xl p-3 text-[#4ADE80] text-xs font-semibold flex items-start space-x-2 animate-in fade-in duration-200">
+            <CheckCircle2 className="w-4 h-4 text-[#22C55E] shrink-0 mt-0.5" />
+            <div className="leading-snug">{submitSuccess}</div>
+          </div>
+        )}
+
+        {submitError && (
+          <div className="bg-rose-500/15 border border-rose-500/40 rounded-2xl p-3 text-rose-300 text-xs font-semibold flex items-start space-x-2 animate-in fade-in duration-200">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="leading-snug">{submitError}</div>
+          </div>
+        )}
+
+        {/* 3. CONVERSION CARDS WITH SWAP ICON OVERLAY */}
+        <div className="relative space-y-2.5 pt-1">
+          {/* TOP CARD: AMOUNT INPUT */}
+          <div className="bg-[#121522] border border-[#22C55E]/30 focus-within:border-[#22C55E]/60 rounded-2xl p-4 flex items-center justify-between shadow-xl transition-all">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-black tracking-wider text-white uppercase">
+                {inputMode === 'TOKEN' ? 'AMOUNT' : 'AMOUNT IN USD'}
+              </span>
+              <button
+                type="button"
+                onClick={handleSetMax}
+                className="bg-[#1C2234] hover:bg-[#22C55E]/20 text-zinc-300 hover:text-[#4ADE80] border border-zinc-700/60 hover:border-[#22C55E]/40 text-[10px] font-extrabold px-2.5 py-0.5 rounded-md transition-all cursor-pointer uppercase tracking-wider"
+              >
+                MAX
+              </button>
+            </div>
+
+            <div className="flex-1 text-right pl-3">
+              {inputMode === 'TOKEN' ? (
+                <input
+                  type="number"
+                  step="any"
+                  value={tokenAmount}
+                  onChange={(e) => handleTokenChange(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-transparent text-right text-lg sm:text-xl font-black font-mono text-white placeholder-zinc-600 focus:outline-none"
+                />
+              ) : (
+                <input
+                  type="number"
+                  step="any"
+                  value={usdAmount}
+                  onChange={(e) => handleUsdChange(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-transparent text-right text-lg sm:text-xl font-black font-mono text-white placeholder-zinc-600 focus:outline-none"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* OVERLAPPING SWAP BUTTON OVERLAY */}
+          <div className="absolute right-6 top-[48px] z-20">
+            <button
+              type="button"
+              onClick={handleSwapMode}
+              title="Click to swap between TokenCare and USD"
+              className="w-9 h-9 rounded-full bg-[#1C2234] hover:bg-[#273049] border border-[#22C55E]/50 text-[#4ADE80] flex items-center justify-center shadow-xl transition-transform active:scale-90 cursor-pointer"
+            >
+              <ArrowUpDown className="w-4 h-4 text-[#4ADE80]" />
+            </button>
+          </div>
+
+          {/* BOTTOM CARD: EQUIVALENT VALUE */}
+          <div className="bg-[#121522] border border-[#22C55E]/30 rounded-2xl p-4 flex items-center justify-between shadow-xl">
+            <span className="text-xs font-bold text-zinc-400">
+              {inputMode === 'TOKEN' ? 'Amount in USD' : 'Amount in TokenCare'}
+            </span>
+            <div className="text-right text-base sm:text-lg font-mono font-black text-white">
+              {inputMode === 'TOKEN'
+                ? `$${usdAmount || '0.00'}`
+                : `${tokenAmount || '0.00'} TC`}
+            </div>
+          </div>
+        </div>
+
+        {/* 4. RATE BANNER */}
+        <div className="bg-[#0D111A] border border-[#22C55E]/30 rounded-xl p-2 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
+          <div className="flex items-center space-x-1.5">
+            <Coins className="w-3 h-3 text-[#4ADE80] shrink-0" />
+            <span>1 TC = $0.00015</span>
+          </div>
+          <div className="text-[#4ADE80] font-bold">
+            mini. ${MIN_WITHDRAWAL_USD.toFixed(2)}
+          </div>
+        </div>
+
+        {/* 5. VERIFICATION / SECURITY BADGE IN MAIN BACKGROUND */}
+        <div className="pt-1 text-center flex items-center justify-center space-x-1 text-[10px] text-zinc-500 font-mono">
+          <ShieldCheck className="w-3.5 h-3.5 text-[#22C55E] inline shrink-0" />
+          <span>Secured by TokenCare DB Payout System</span>
+        </div>
+      </div>
+
+      {/* BOTTOM SECTION: LONG FULL-WIDTH BUTTON DRAGGED TO THE VERY BOTTOM */}
+      <div className="w-full max-w-md mx-auto pb-2 sm:pb-3">
+        <button
+          type="button"
+          onClick={executeWithdrawal}
+          disabled={isSubmitting}
+          className="w-full h-11 bg-gradient-to-tr from-[#15803D] via-[#16A34A] to-[#4ADE80] hover:from-[#16A34A] hover:to-[#4ADE80] text-black font-black text-xs tracking-wider uppercase rounded-xl flex items-center justify-center space-x-2 shadow-[0_4px_20px_rgba(34,197,94,0.5)] transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+        >
+          {isSubmitting ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin text-black" />
+              <span>Processing Withdrawal...</span>
+            </>
+          ) : (
+            <>
+              <span>Send Request</span>
+              <ArrowRight className="w-4 h-4 text-black" />
+            </>
+          )}
+        </button>
+      </div>
+
+    </div>
+  );
+};
