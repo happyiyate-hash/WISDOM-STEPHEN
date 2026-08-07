@@ -80,7 +80,7 @@ export const MobileDonateView: React.FC<MobileDonateViewProps> = ({
   return (
     <div className="space-y-3.5 text-white font-sans animate-in fade-in duration-200 min-h-screen flex flex-col -mt-2">
       {/* 1. STICKY TOP NAVIGATION CARD FOR DONATE PAGE (Replaces default profile header) */}
-      <header className="sticky top-0 z-40 bg-[#090C12]/95 backdrop-blur-xl border-b border-emerald-500/30 rounded-b-2xl p-2.5 shadow-[0_4px_25px_rgba(0,0,0,0.7)] max-w-md mx-auto w-full transition-all">
+      <header className="sticky top-0 z-40 bg-[#090C12] backdrop-blur-xl border-b border-emerald-500/30 rounded-b-2xl p-2.5 pt-safe-nav shadow-[0_4px_25px_rgba(0,0,0,0.7)] max-w-md mx-auto w-full transition-all">
         <div className="flex items-center space-x-2">
           {/* Left: Active Network Badge Selector */}
           <button

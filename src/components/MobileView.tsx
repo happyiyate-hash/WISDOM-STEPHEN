@@ -231,7 +231,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
     <div className={`min-h-screen bg-[#06080E] text-zinc-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-black relative ${mobileTab === 'withdrawals' || mobileTab === 'notifications' ? 'pb-4' : 'pb-24'}`}>
       {/* Fixed Sticky Curved Top Header Card (Does not scroll) - Hidden on Withdrawals, Notifications, Donate, Tokens & Settings */}
       {mobileTab !== 'withdrawals' && mobileTab !== 'notifications' && mobileTab !== 'donate' && mobileTab !== 'tokens' && mobileTab !== 'profile' && (
-        <header className="sticky top-0 z-40 bg-[#090C12]/95 backdrop-blur-xl border-b border-zinc-800/80 rounded-b-xl px-3 pt-2 pb-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.6)] max-w-md mx-auto w-full transition-all">
+        <header className="sticky top-0 z-40 bg-[#090C12] backdrop-blur-xl border-b border-zinc-800/80 rounded-b-xl px-3 pt-2 pt-safe-nav pb-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.6)] max-w-md mx-auto w-full transition-all">
           <div className="flex items-center justify-between relative min-h-[42px]">
             {/* Left: Profile Avatar */}
             <div
@@ -547,7 +547,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
 
       {/* Fixed Bottom Navigation Bar (Hidden when Send/Withdrawals or Notifications is full screen) */}
       {mobileTab !== 'withdrawals' && mobileTab !== 'notifications' && (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#090C12]/95 backdrop-blur-xl border-t border-zinc-800/80 rounded-t-3xl px-3 py-2.5 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#090C12] backdrop-blur-xl border-t border-zinc-800/80 rounded-t-3xl px-3 pt-2.5 pb-safe-nav shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
           <div className="max-w-md mx-auto grid grid-cols-5 items-center justify-items-center relative">
             {/* 1. Overview */}
           <button

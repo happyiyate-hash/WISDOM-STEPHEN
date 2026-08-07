@@ -1,1 +1,27 @@
 @import "tailwindcss";
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+html {
+  background-color: #090C12;
+  color-scheme: dark;
+}
+
+body {
+  background-color: #06080E;
+  color: #f4f4f5;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area padding helper utilities for PWA navigation blending */
+.pt-safe-nav {
+  padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+}
+
+.pb-safe-nav {
+  padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
+}

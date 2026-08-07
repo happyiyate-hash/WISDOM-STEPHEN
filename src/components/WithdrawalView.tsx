@@ -230,7 +230,7 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
 
   return (
     /* FIXED FULL SCREEN OVERLAY: Own Layout, completely non-scrolling viewport */
-    <div className="fixed inset-0 z-[100] w-full h-full bg-[#06080E] text-white flex flex-col justify-between p-4 sm:p-6 overflow-hidden select-none animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[100] w-full h-full bg-[#06080E] text-white flex flex-col justify-between p-4 sm:p-6 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] overflow-hidden select-none animate-in fade-in duration-300">
       
       {/* TOP SECTION: CUSTOM PAGE NAVIGATION & INPUT CARDS */}
       <div className="w-full max-w-md mx-auto space-y-4">

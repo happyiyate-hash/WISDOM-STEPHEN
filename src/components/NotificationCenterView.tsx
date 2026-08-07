@@ -228,7 +228,7 @@ export const NotificationCenterView: React.FC<NotificationCenterViewProps> = ({
     <div className="w-full max-w-md mx-auto space-y-2.5 pt-0 pb-4 animate-in fade-in duration-300 select-none">
       
       {/* 1. TOP HEADER - CLEAN & UNIFIED */}
-      <div className="flex items-center justify-between px-3.5 pt-2 pb-2.5 border-b border-zinc-800/80">
+      <div className="flex items-center justify-between px-3.5 pt-safe-nav pb-2.5 border-b border-zinc-800/80 sticky top-0 z-40 bg-[#06080E]">
         <div className="flex items-center space-x-2.5">
           {onClose && (
             <button
