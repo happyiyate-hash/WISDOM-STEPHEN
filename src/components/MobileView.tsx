@@ -139,7 +139,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
   }, [currentUser, tokens]);
 
   // Calculated real metrics from actual submitted tokens and wallet
-  const rewardTokens = wallet?.unclaimedTokens ?? (userProfile?.unclaimed_reward_balance ?? 600);
+  const rewardTokens = wallet?.unclaimedTokens ?? (userProfile?.unclaimed_reward_balance ?? 0);
   const rewardUsd = (rewardTokens * REWARD_RATE_USD).toFixed(3);
   const totalVerifiedCount = tokens.length;
   const safeTokensCount = tokens.filter((t) => t.safety?.rating === 'SAFE' || t.verificationReport?.status === 'APPROVED').length;
@@ -229,8 +229,8 @@ export const MobileView: React.FC<MobileViewProps> = ({
 
   return (
     <div className={`min-h-screen bg-[#06080E] text-zinc-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-black relative ${mobileTab === 'withdrawals' || mobileTab === 'notifications' ? 'pb-4' : 'pb-24'}`}>
-      {/* Fixed Sticky Curved Top Header Card (Does not scroll) - Hidden on Withdrawals & Notifications */}
-      {mobileTab !== 'withdrawals' && mobileTab !== 'notifications' && (
+      {/* Fixed Sticky Curved Top Header Card (Does not scroll) - Hidden on Withdrawals, Notifications, Donate, Tokens & Settings */}
+      {mobileTab !== 'withdrawals' && mobileTab !== 'notifications' && mobileTab !== 'donate' && mobileTab !== 'tokens' && mobileTab !== 'profile' && (
         <header className="sticky top-0 z-40 bg-[#090C12]/95 backdrop-blur-xl border-b border-zinc-800/80 rounded-b-xl px-3 pt-2 pb-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.6)] max-w-md mx-auto w-full transition-all">
           <div className="flex items-center justify-between relative min-h-[42px]">
             {/* Left: Profile Avatar */}
@@ -293,7 +293,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
       )}
 
       {/* Main Screen Container */}
-      <main className={`flex-1 ${mobileTab === 'notifications' ? 'px-0 py-1' : 'px-3 py-2'} max-w-md mx-auto w-full space-y-2.5`}>
+      <main className={`flex-1 ${['notifications', 'donate', 'tokens', 'profile', 'withdrawals'].includes(mobileTab) ? 'px-0 py-0' : 'px-3 py-2'} max-w-md mx-auto w-full space-y-2.5`}>
         {/* OVERVIEW TAB */}
         {mobileTab === 'overview' && (
           <div className="space-y-3 animate-in fade-in duration-200">
@@ -481,6 +481,7 @@ export const MobileView: React.FC<MobileViewProps> = ({
             onFetchToken={handleFetchToken}
             isLoading={isLoading}
             errorMessage={errorMessage}
+            autoSwitchNotice={autoSwitchNotice}
             apiKeys={apiKeys}
             fetchedToken={fetchedToken}
             setFetchedToken={setFetchedToken}

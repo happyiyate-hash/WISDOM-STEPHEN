@@ -56,7 +56,9 @@ export interface SupabaseUserProfile {
   avatar_url?: string;
   total_reward_balance: number;
   unclaimed_reward_balance: number;
+  wallet_address?: string | null;
   created_at?: string;
+  updated_at?: string;
 }
 
 /**
@@ -272,7 +274,8 @@ export async function fetchTokensFromSupabase(): Promise<SubmittedToken[]> {
 }
 
 /**
- * Fetch user profile combining LocalStorage cache, Supabase 'profiles' table, and Auth session metadata
+ * Fetch user profile combining LocalStorage cache, Supabase 'profiles' table, and Auth session metadata.
+ * Automatically checks the 'profiles' table and creates a row if none exists!
  */
 export async function getUserProfile(userId: string, sessionUser?: any): Promise<SupabaseUserProfile> {
   const supabase = getSupabase();
@@ -291,9 +294,40 @@ export async function getUserProfile(userId: string, sessionUser?: any): Promise
   // 2. Fetch from Supabase 'profiles' table
   let dbProfile: any = null;
   try {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (data) {
       dbProfile = data;
+    } else if (!error && userId) {
+      // Profile row DOES NOT EXIST yet in Supabase! Automatically create row in profiles table.
+      const email = sessionUser?.email || cachedProfile.email || '';
+      const defaultUsername = email ? email.split('@')[0] : `user_${userId.slice(0, 6)}`;
+      const autoProfilePayload = {
+        id: userId,
+        email: email,
+        username: defaultUsername,
+        avatar_url: sessionUser?.user_metadata?.avatar_url || cachedProfile.avatar_url || '',
+        total_reward_balance: 0,
+        unclaimed_reward_balance: 0,
+        wallet_address: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      try {
+        const { data: insertedData } = await supabase
+          .from('profiles')
+          .insert([autoProfilePayload])
+          .select()
+          .maybeSingle();
+        if (insertedData) {
+          dbProfile = insertedData;
+        } else {
+          dbProfile = autoProfilePayload;
+        }
+      } catch (insertErr) {
+        console.warn('[Supabase Profile] Auto-create profile row note:', insertErr);
+        dbProfile = autoProfilePayload;
+      }
     }
   } catch (err) {
     console.warn('[Supabase Profile] DB fetch error:', err);
@@ -302,7 +336,7 @@ export async function getUserProfile(userId: string, sessionUser?: any): Promise
   // 3. Fallback to auth session metadata
   const meta = sessionUser?.user_metadata || {};
   const email = sessionUser?.email || dbProfile?.email || cachedProfile.email || '';
-  const defaultUsername = email ? email.split('@')[0] : 'user';
+  const defaultUsername = email ? email.split('@')[0] : `user_${userId.slice(0, 6)}`;
 
   const mergedProfile: SupabaseUserProfile = {
     id: userId,
@@ -313,7 +347,7 @@ export async function getUserProfile(userId: string, sessionUser?: any): Promise
       meta.username ||
       defaultUsername,
     display_name:
-      dbProfile?.display_name ||
+      dbProfile?.username ||
       cachedProfile.display_name ||
       meta.full_name ||
       meta.display_name ||
@@ -333,7 +367,9 @@ export async function getUserProfile(userId: string, sessionUser?: any): Promise
         cachedProfile.unclaimed_reward_balance ??
         0
     ),
+    wallet_address: dbProfile?.wallet_address || cachedProfile.wallet_address || null,
     created_at: dbProfile?.created_at || cachedProfile.created_at || new Date().toISOString(),
+    updated_at: dbProfile?.updated_at || cachedProfile.updated_at || new Date().toISOString(),
   };
 
   // Cache back to LocalStorage
@@ -345,29 +381,30 @@ export async function getUserProfile(userId: string, sessionUser?: any): Promise
 }
 
 /**
- * Update user profile (username, display name, avatar) in Supabase profiles table, Auth metadata, and LocalStorage
+ * Update user profile in Supabase profiles table using strictly existing columns (id, email, username, avatar_url, wallet_address, updated_at)
  */
 export async function updateUserProfile(
   userId: string,
-  updates: { username?: string; display_name?: string; avatar_url?: string },
+  updates: { username?: string; display_name?: string; avatar_url?: string; wallet_address?: string },
   sessionUser?: any
 ): Promise<{ success: boolean; error?: string; profile?: SupabaseUserProfile }> {
   const supabase = getSupabase();
   try {
     const username = updates.username?.trim();
-    const displayName = updates.display_name?.trim() || username;
-    const avatarUrl = updates.avatar_url?.trim();
+    const avatarUrl = updates.avatar_url !== undefined ? updates.avatar_url?.trim() : undefined;
+    const walletAddress = updates.wallet_address !== undefined ? updates.wallet_address?.trim() : undefined;
 
     const email = sessionUser?.email || '';
 
-    const payload = {
+    // Only include schema-supported columns in profiles table
+    const payload: any = {
       id: userId,
-      email: email,
-      username: username,
-      display_name: displayName,
-      avatar_url: avatarUrl,
       updated_at: new Date().toISOString(),
     };
+    if (email) payload.email = email;
+    if (username) payload.username = username;
+    if (avatarUrl !== undefined) payload.avatar_url = avatarUrl;
+    if (walletAddress !== undefined) payload.wallet_address = walletAddress;
 
     // 1. Immediately update LocalStorage so user data is NEVER lost on page reload
     let localCache: Partial<SupabaseUserProfile> = {};
@@ -381,10 +418,12 @@ export async function updateUserProfile(
       id: userId,
       email: email || localCache.email || '',
       username: username || localCache.username || '',
-      display_name: displayName || localCache.display_name || '',
+      display_name: updates.display_name || username || localCache.display_name || '',
       avatar_url: avatarUrl !== undefined ? avatarUrl : (localCache.avatar_url || ''),
+      wallet_address: walletAddress !== undefined ? walletAddress : (localCache.wallet_address || null),
       total_reward_balance: localCache.total_reward_balance || 0,
       unclaimed_reward_balance: localCache.unclaimed_reward_balance || 0,
+      updated_at: payload.updated_at,
     };
 
     try {
@@ -417,7 +456,6 @@ export async function updateUserProfile(
         data: {
           username: username,
           avatar_url: avatarUrl,
-          full_name: displayName,
         },
       });
     } catch (authErr) {
@@ -750,9 +788,9 @@ export async function saveUserWithdrawalAddress(
     console.warn('Supabase user_addresses save note:', dbErr);
   }
 
-  // Also sync address into profiles table
+  // Also sync address directly into profiles table (wallet_address column)
   try {
-    await supabase.from('profiles').update({ updated_at: new Date().toISOString() }).eq('id', userId);
+    await supabase.from('profiles').update({ wallet_address: cleanAddr, updated_at: new Date().toISOString() }).eq('id', userId);
   } catch (e) {
     console.warn('Profile wallet_address sync note:', e);
   }
@@ -810,22 +848,31 @@ export async function uploadAvatarToSupabaseStorage(
 }
 
 /**
- * Fetch saved withdrawal address for user
+ * Fetch saved withdrawal address for user from profiles table or user_addresses or LocalStorage
  */
 export async function getUserWithdrawalAddress(userId: string): Promise<string | null> {
-  // 1. Try LocalStorage
+  const supabase = getSupabase();
+
+  // 1. Try DB profiles table (wallet_address column)
+  try {
+    const { data } = await supabase.from('profiles').select('wallet_address').eq('id', userId).maybeSingle();
+    if (data?.wallet_address && /^0x[a-fA-F0-9]{40}$/.test(data.wallet_address.trim())) {
+      return data.wallet_address.trim();
+    }
+  } catch {}
+
+  // 2. Try DB user_addresses table
+  try {
+    const { data } = await supabase.from('user_addresses').select('wallet_address').eq('user_id', userId).maybeSingle();
+    if (data?.wallet_address && /^0x[a-fA-F0-9]{40}$/.test(data.wallet_address.trim())) {
+      return data.wallet_address.trim();
+    }
+  } catch {}
+
+  // 3. Try LocalStorage
   try {
     const local = localStorage.getItem(`tokencare_saved_address_${userId}`);
     if (local && /^0x[a-fA-F0-9]{40}$/.test(local)) return local;
-  } catch {}
-
-  // 2. Try DB
-  const supabase = getSupabase();
-  try {
-    const { data } = await supabase.from('user_addresses').select('wallet_address').eq('user_id', userId).maybeSingle();
-    if (data?.wallet_address) {
-      return data.wallet_address;
-    }
   } catch {}
 
   return null;
@@ -1092,38 +1139,37 @@ export async function fetchUserNotifications(userId: string): Promise<AppNotific
     console.warn('LocalStorage read error for notifications:', lsErr);
   }
 
-  // If both are empty, provide initial welcome notifications
+  // Filter out any legacy hardcoded default notifications from LocalStorage
+  localNotifications = localNotifications.filter(
+    (n) =>
+      !n.id.startsWith('notif-welcome-') &&
+      !n.id.startsWith('notif-reward-info-') &&
+      n.id !== 'n1' &&
+      n.id !== 'n2' &&
+      n.id !== 'n3' &&
+      n.id !== 'n4' &&
+      n.id !== 'n5' &&
+      n.id !== 'n6'
+  );
+
   if (dbNotifications.length === 0 && localNotifications.length === 0) {
-    const defaultNotifs: AppNotification[] = [
-      {
-        id: `notif-welcome-${userId}`,
-        user_id: userId,
-        type: 'SYSTEM',
-        title: 'Welcome to TokenCare',
-        message: 'Your account is verified and ready for EVM token donations and reward tracking.',
-        is_read: false,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: `notif-reward-info-${userId}`,
-        user_id: userId,
-        type: 'REWARD_EARNED',
-        title: 'Reward System Active',
-        message: 'Earn +15 REWARD tokens for every verified ERC-20 token contract submitted to the directory.',
-        is_read: false,
-        created_at: new Date(Date.now() - 3600000).toISOString(),
-      },
-    ];
-    try {
-      localStorage.setItem(`tokencare_notifications_${userId}`, JSON.stringify(defaultNotifs));
-    } catch {}
-    return defaultNotifs;
+    return [];
   }
 
-  // Merge and deduplicate by id
+  // Merge and deduplicate by id while preserving read status
   const map = new Map<string, AppNotification>();
   localNotifications.forEach((n) => map.set(n.id, n));
-  dbNotifications.forEach((n) => map.set(n.id, n));
+  dbNotifications.forEach((n) => {
+    const existing = map.get(n.id);
+    if (existing) {
+      map.set(n.id, {
+        ...n,
+        is_read: existing.is_read || n.is_read,
+      });
+    } else {
+      map.set(n.id, n);
+    }
+  });
 
   const merged = Array.from(map.values()).sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -1136,24 +1182,13 @@ export async function fetchUserNotifications(userId: string): Promise<AppNotific
  * Fetch unread notification count for a user (SELECT COUNT(*) FROM notifications WHERE user_id = userId AND is_read = false)
  */
 export async function fetchUnreadNotificationCount(userId: string): Promise<number> {
-  const supabase = getSupabase();
   try {
-    const { count, error } = await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('is_read', false);
-
-    if (!error && count !== null) {
-      return count;
-    }
+    const notifs = await fetchUserNotifications(userId);
+    return notifs.filter((n) => !n.is_read).length;
   } catch (err) {
-    console.warn('[Supabase] fetchUnreadNotificationCount query warning:', err);
+    console.warn('[Supabase] fetchUnreadNotificationCount warning:', err);
+    return 0;
   }
-
-  // Fallback: load notifications and count where is_read === false
-  const notifs = await fetchUserNotifications(userId);
-  return notifs.filter((n) => !n.is_read).length;
 }
 
 /**
@@ -1192,6 +1227,8 @@ export async function markAllNotificationsAsRead(userId: string): Promise<void> 
   // LocalStorage update
   try {
     const key = `tokencare_notifications_${userId}`;
+    const initKey = `tokencare_notifications_initialized_${userId}`;
+    localStorage.setItem(initKey, 'true');
     const raw = localStorage.getItem(key);
     if (raw) {
       const list: AppNotification[] = JSON.parse(raw);

@@ -403,7 +403,25 @@ export default function App() {
 
       const chainMeta = getChainInfo(activeChainKey);
       const chainLogoUrl = getChainLogoUrl(activeChainKey);
-      const tokenName = cgData?.name || erc20Meta?.name || (autoDetected?.symbol ? `${autoDetected.symbol} Token` : `${chainMeta.name} Token`);
+
+      // Verify that token metadata (name or symbol) was actually retrieved from contract RPC, CoinGecko, or DexScreener
+      const hasValidName = cgData?.name || erc20Meta?.name;
+      const hasValidSymbol = cgData?.symbol || erc20Meta?.symbol || autoDetected?.symbol;
+
+      if (!hasValidName && !hasValidSymbol) {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearTimeout(timer3);
+        clearTimeout(timer4);
+        setFetchedToken(null);
+        setErrorMessage('Could not complete verification. Check your contract address.');
+        setIsVerifying(false);
+        setIsLoading(false);
+        setStatusMessage(null);
+        return;
+      }
+
+      const tokenName = cgData?.name || erc20Meta?.name || `${hasValidSymbol} Token`;
       const tokenSymbol = cgData?.symbol || erc20Meta?.symbol || autoDetected?.symbol || 'TOK';
       const rawLogoUrl = erc20Meta?.logoUrl || cgData?.logoUrl || (dexData as any)?.logoUrl || '';
       const preparedLogoUrl = rawLogoUrl ? await downloadAndPrepareImageSource(rawLogoUrl) : '';
@@ -480,7 +498,8 @@ export default function App() {
       }, 3100);
     } catch (err: any) {
       console.error('[App] Error fetching token:', err);
-      setErrorMessage('Failed to fetch EVM token details. Please verify contract address.');
+      setFetchedToken(null);
+      setErrorMessage('Could not complete verification. Check your contract address.');
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);

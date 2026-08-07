@@ -28,70 +28,6 @@ interface NotificationCenterViewProps {
   onUnreadCountChange?: (count: number) => void;
 }
 
-// Default fallback items matching the screenshot
-const DEFAULT_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'n1',
-    user_id: 'demo',
-    title: 'Welcome to TokenCare',
-    message: 'Your account is verified and ready for EVM token donations and reward tracking.',
-    type: 'SYSTEM',
-    is_read: false,
-    created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    metadata: { badge: 'New', category: 'system', icon: 'gift', color: 'purple' },
-  },
-  {
-    id: 'n2',
-    user_id: 'demo',
-    title: 'Reward System Active',
-    message: 'Earn +15 REWARD tokens for every verified ERC-20 token contract submitted.',
-    type: 'REWARD_EARNED',
-    is_read: false,
-    created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    metadata: { badge: 'Reward', category: 'rewards', icon: 'coins', color: 'emerald' },
-  },
-  {
-    id: 'n3',
-    user_id: 'demo',
-    title: 'Withdrawal Completed',
-    message: 'Your withdrawal of 250 REWARD tokens has been completed successfully.',
-    type: 'WITHDRAWAL_APPROVED',
-    is_read: false,
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    metadata: { badge: 'Success', category: 'transactions', icon: 'arrow-down', color: 'blue' },
-  },
-  {
-    id: 'n4',
-    user_id: 'demo',
-    title: 'New Token Verification',
-    message: 'A new token contract has been submitted for verification.',
-    type: 'SYSTEM',
-    is_read: true,
-    created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    metadata: { badge: 'Info', category: 'system', icon: 'file', color: 'amber' },
-  },
-  {
-    id: 'n5',
-    user_id: 'demo',
-    title: 'Donation Received',
-    message: 'You received a donation of 100 USDT from 0x8a7...12f3',
-    type: 'TOKEN_DONATED',
-    is_read: true,
-    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    metadata: { badge: 'Donation', category: 'transactions', icon: 'arrow-up', color: 'emerald' },
-  },
-  {
-    id: 'n6',
-    user_id: 'demo',
-    title: 'Security Alert',
-    message: 'New login detected from Chrome on Windows • Benin City, Nigeria',
-    type: 'SECURITY_ALERT',
-    is_read: true,
-    created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    metadata: { badge: 'Alert', category: 'system', icon: 'shield', color: 'purple' },
-  },
-];
-
 export const NotificationCenterView: React.FC<NotificationCenterViewProps> = ({
   currentUser,
   onClose,
@@ -108,18 +44,15 @@ export const NotificationCenterView: React.FC<NotificationCenterViewProps> = ({
     setLoading(true);
     try {
       const data = await fetchUserNotifications(userId);
-      const list = data && data.length > 0 ? data : DEFAULT_NOTIFICATIONS;
-      const dedupped = deduplicateNotifications(list);
+      const dedupped = deduplicateNotifications(data || []);
       setNotifications(dedupped);
       
       const unread = dedupped.filter((n) => !n.is_read).length;
       if (onUnreadCountChange) onUnreadCountChange(unread);
     } catch (err) {
       console.warn('Failed to load notifications:', err);
-      const dedupped = deduplicateNotifications(DEFAULT_NOTIFICATIONS);
-      setNotifications(dedupped);
-      const unread = dedupped.filter((n) => !n.is_read).length;
-      if (onUnreadCountChange) onUnreadCountChange(unread);
+      setNotifications([]);
+      if (onUnreadCountChange) onUnreadCountChange(0);
     } finally {
       setLoading(false);
     }
@@ -154,6 +87,19 @@ export const NotificationCenterView: React.FC<NotificationCenterViewProps> = ({
     };
   }, [userId]);
 
+  // Auto-mark notifications as read when viewing Notification Center
+  useEffect(() => {
+    if (notifications.length > 0) {
+      const hasUnread = notifications.some((n) => !n.is_read);
+      if (hasUnread) {
+        const timer = setTimeout(() => {
+          handleMarkAllRead();
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [notifications]);
+
   const handleMarkAsRead = async (id: string) => {
     const target = notifications.find((n) => n.id === id);
     if (target && target.is_read) return;
@@ -173,41 +119,43 @@ export const NotificationCenterView: React.FC<NotificationCenterViewProps> = ({
     if (onUnreadCountChange) onUnreadCountChange(0);
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     setNotifications([]);
     if (onUnreadCountChange) onUnreadCountChange(0);
+    try {
+      localStorage.setItem(`tokencare_notifications_${userId}`, JSON.stringify([]));
+      await markAllNotificationsAsRead(userId);
+    } catch {}
+  };
+
+  // Robust Category Matching
+  const isRewardNotif = (n: AppNotification) => {
+    const type = (n.type || '').toLowerCase();
+    const cat = n.metadata?.category;
+    return type.includes('reward') || type.includes('donat') || cat === 'rewards';
+  };
+
+  const isTxNotif = (n: AppNotification) => {
+    const type = (n.type || '').toLowerCase();
+    const cat = n.metadata?.category;
+    return type.includes('withdraw') || type.includes('payout') || type.includes('tx') || cat === 'transactions';
+  };
+
+  const isSystemNotif = (n: AppNotification) => {
+    const type = (n.type || '').toLowerCase();
+    const cat = n.metadata?.category;
+    return type.includes('security') || type.includes('system') || type.includes('alert') || type.includes('login') || cat === 'system';
   };
 
   // Category counts
-  const rewardsCount = notifications.filter(
-    (n) => n.type === 'TOKEN_DONATED' || n.type === 'REWARD_EARNED' || n.metadata?.category === 'rewards'
-  ).length;
-  const transactionsCount = notifications.filter(
-    (n) =>
-      n.type === 'WITHDRAWAL_SUBMITTED' ||
-      n.type === 'WITHDRAWAL_APPROVED' ||
-      n.type === 'WITHDRAWAL_FAILED' ||
-      n.metadata?.category === 'transactions'
-  ).length;
-  const systemCount = notifications.filter(
-    (n) => n.type === 'SECURITY_ALERT' || n.type === 'SYSTEM' || n.metadata?.category === 'system'
-  ).length;
+  const rewardsCount = notifications.filter(isRewardNotif).length;
+  const transactionsCount = notifications.filter(isTxNotif).length;
+  const systemCount = notifications.filter(isSystemNotif).length;
 
   const filteredNotifications = notifications.filter((n) => {
-    if (activeFilter === 'rewards') {
-      return n.type === 'TOKEN_DONATED' || n.type === 'REWARD_EARNED' || n.metadata?.category === 'rewards';
-    }
-    if (activeFilter === 'transactions') {
-      return (
-        n.type === 'WITHDRAWAL_SUBMITTED' ||
-        n.type === 'WITHDRAWAL_APPROVED' ||
-        n.type === 'WITHDRAWAL_FAILED' ||
-        n.metadata?.category === 'transactions'
-      );
-    }
-    if (activeFilter === 'system') {
-      return n.type === 'SECURITY_ALERT' || n.type === 'SYSTEM' || n.metadata?.category === 'system';
-    }
+    if (activeFilter === 'rewards') return isRewardNotif(n);
+    if (activeFilter === 'transactions') return isTxNotif(n);
+    if (activeFilter === 'system') return isSystemNotif(n);
     return true;
   });
 

@@ -9,12 +9,15 @@ import {
   RefreshCw,
   Coins,
   ArrowRight,
+  Plus,
+  Save,
 } from 'lucide-react';
 import { UserRewardWallet } from '../types';
 import {
   SupabaseUserProfile,
   submitWithdrawalRequest,
   getUserWithdrawalAddress,
+  saveUserWithdrawalAddress,
 } from '../lib/supabase';
 import { REWARD_RATE_USD } from '../constants/chains';
 
@@ -40,9 +43,9 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
 
   const userId = currentUser?.id || 'demo-user';
 
-  // Available user balance (tokens)
+  // Available user balance (tokens from database or wallet)
   const rawTokens = userProfile?.unclaimed_reward_balance ?? wallet.unclaimedTokens ?? 0;
-  const displayBalanceTokens = rawTokens > 0 ? rawTokens : 12450.75;
+  const displayBalanceTokens = Math.max(0, rawTokens);
 
   // Input states
   const [tokenAmount, setTokenAmount] = useState<string>('');
@@ -52,6 +55,9 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
   // Saved EVM address from DB
   const [savedAddress, setSavedAddress] = useState<string>('');
   const [isLoadingAddress, setIsLoadingAddress] = useState<boolean>(true);
+  const [isEditingAddress, setIsEditingAddress] = useState<boolean>(false);
+  const [newAddressInput, setNewAddressInput] = useState<string>('');
+  const [isSavingAddress, setIsSavingAddress] = useState<boolean>(false);
 
   // Status & Notifications
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -64,21 +70,19 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
     async function loadAddress() {
       setIsLoadingAddress(true);
       try {
-        if (userProfile?.payout_address && /^0x[a-fA-F0-9]{40}$/.test(userProfile.payout_address)) {
-          if (isMounted) setSavedAddress(userProfile.payout_address);
+        if (userProfile?.wallet_address && /^0x[a-fA-F0-9]{40}$/.test(userProfile.wallet_address.trim())) {
+          if (isMounted) setSavedAddress(userProfile.wallet_address.trim());
         } else if (userId) {
           const fetched = await getUserWithdrawalAddress(userId);
           if (isMounted && fetched) {
             setSavedAddress(fetched);
           } else if (isMounted) {
-            setSavedAddress(userProfile?.wallet_address || '0x71C7656EC7ab88b098defB751B7401B5f6d8976F');
+            setSavedAddress('');
           }
         }
       } catch (err) {
         console.warn('Error fetching saved address from DB:', err);
-        if (isMounted) {
-          setSavedAddress('0x71C7656EC7ab88b098defB751B7401B5f6d8976F');
-        }
+        if (isMounted) setSavedAddress('');
       } finally {
         if (isMounted) setIsLoadingAddress(false);
       }
@@ -88,6 +92,33 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
       isMounted = false;
     };
   }, [userId, userProfile]);
+
+  // Handle saving new payout address
+  const handleSavePayoutAddress = async () => {
+    if (!newAddressInput || !/^0x[a-fA-F0-9]{40}$/.test(newAddressInput.trim())) {
+      setSubmitError('Please enter a valid EVM address (starts with 0x followed by 40 hexadecimal characters).');
+      return;
+    }
+
+    setIsSavingAddress(true);
+    setSubmitError(null);
+    try {
+      const clean = newAddressInput.trim();
+      const res = await saveUserWithdrawalAddress(userId, clean);
+      if (res.success) {
+        setSavedAddress(clean);
+        setIsEditingAddress(false);
+        setNewAddressInput('');
+        setSubmitSuccess('Payout address successfully saved to your profile!');
+      } else {
+        setSubmitError(res.error || 'Failed to save payout address.');
+      }
+    } catch (e: any) {
+      setSubmitError(e.message || 'Error saving address.');
+    } finally {
+      setIsSavingAddress(false);
+    }
+  };
 
   // Handle Token input changes
   const handleTokenChange = (val: string) => {
@@ -132,6 +163,12 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
     setSubmitError(null);
     setSubmitSuccess(null);
 
+    if (!savedAddress || !/^0x[a-fA-F0-9]{40}$/.test(savedAddress.trim())) {
+      setSubmitError('No valid payout address found. Please add and save your EVM payout address first.');
+      setIsEditingAddress(true);
+      return;
+    }
+
     const amountTokensNum = parseFloat(tokenAmount);
     const amountUsdNum = amountTokensNum * REWARD_RATE_USD;
 
@@ -156,14 +193,12 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
       return;
     }
 
-    const recipientAddr = savedAddress || '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
-
     setIsSubmitting(true);
     try {
       const res = await submitWithdrawalRequest(
         userId,
         amountTokensNum,
-        recipientAddr,
+        savedAddress,
         '137'
       );
 
@@ -231,36 +266,113 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
           </div>
         </header>
 
-        {/* 2. SAVED PAYOUT ADDRESS CARD (Auto-fetched from database) */}
-        <div className="bg-[#0D111A] border border-[#22C55E]/30 rounded-2xl p-3.5 flex items-center justify-between text-xs shadow-md">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-[#22C55E]/15 border border-[#22C55E]/40 flex items-center justify-center text-[#4ADE80] shrink-0">
-              <Wallet className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                Saved Payout Address (Auto-Fetched)
+        {/* 2. SAVED PAYOUT ADDRESS CARD (Auto-fetched from database with inline Add/Edit) */}
+        <div className="bg-[#0D111A] border border-[#22C55E]/30 rounded-2xl p-3.5 space-y-2.5 text-xs shadow-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-xl bg-[#22C55E]/15 border border-[#22C55E]/40 flex items-center justify-center text-[#4ADE80] shrink-0">
+                <Wallet className="w-4.5 h-4.5" />
               </div>
-              <div className="text-xs font-mono font-bold text-[#4ADE80] flex items-center space-x-1.5 mt-0.5">
-                {isLoadingAddress ? (
-                  <span className="text-zinc-500 animate-pulse">Fetching from database...</span>
-                ) : (
-                  <span>
-                    {savedAddress
-                      ? `${savedAddress.slice(0, 8)}...${savedAddress.slice(-6)}`
-                      : 'Saved in profile'}
-                  </span>
-                )}
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#22C55E] inline shrink-0" />
+              <div>
+                <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                  Saved Payout Address
+                </div>
+                <div className="text-xs font-mono font-bold text-[#4ADE80] flex items-center space-x-1.5 mt-0.5">
+                  {isLoadingAddress ? (
+                    <span className="text-zinc-500 animate-pulse">Fetching from database...</span>
+                  ) : savedAddress ? (
+                    <>
+                      <span className="truncate max-w-[170px] sm:max-w-[200px]">{savedAddress}</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#22C55E] inline shrink-0" />
+                    </>
+                  ) : (
+                    <span className="text-amber-400 font-semibold">No Address Saved</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-right pl-2">
+              <div className="text-[10px] text-zinc-400 font-bold uppercase">Balance</div>
+              <div className="text-xs font-mono font-black text-white">
+                {displayBalanceTokens.toLocaleString('en-US', { maximumFractionDigits: 2 })} TC
               </div>
             </div>
           </div>
-          <div className="text-right pl-2">
-            <div className="text-[10px] text-zinc-400 font-bold uppercase">Balance</div>
-            <div className="text-xs font-mono font-black text-white">
-              {displayBalanceTokens.toLocaleString('en-US', { maximumFractionDigits: 2 })} TC
+
+          {/* Inline Edit/Add Input Drawer */}
+          {isEditingAddress ? (
+            <div className="pt-2 border-t border-zinc-800/80 space-y-2 animate-in fade-in duration-200">
+              <label className="text-[10px] text-zinc-400 font-bold uppercase block">
+                Enter Polygon / EVM Address (0x...)
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={newAddressInput}
+                  onChange={(e) => setNewAddressInput(e.target.value)}
+                  placeholder="0x..."
+                  className="flex-1 bg-[#06080E] border border-zinc-700 focus:border-[#22C55E] text-white font-mono text-xs rounded-xl px-3 py-2 focus:outline-none placeholder:text-zinc-600"
+                />
+                <button
+                  type="button"
+                  onClick={handleSavePayoutAddress}
+                  disabled={isSavingAddress}
+                  className="px-3 py-2 bg-[#22C55E] hover:bg-[#16A34A] text-black font-extrabold text-xs rounded-xl flex items-center space-x-1 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {isSavingAddress ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingAddress(false);
+                    setNewAddressInput('');
+                  }}
+                  className="px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-          </div>
+          ) : !savedAddress && !isLoadingAddress ? (
+            <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between">
+              <p className="text-[11px] text-amber-300/90 leading-tight">
+                Please add an EVM payout address to receive your USDT withdrawals.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewAddressInput('');
+                  setIsEditingAddress(true);
+                }}
+                className="px-3 py-1.5 bg-[#22C55E]/20 hover:bg-[#22C55E]/30 border border-[#22C55E]/50 text-[#4ADE80] font-bold text-xs rounded-xl flex items-center space-x-1 transition-all cursor-pointer shrink-0 ml-2"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Address</span>
+              </button>
+            </div>
+          ) : savedAddress ? (
+            <div className="pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-400">
+              <span>Payout Target: Polygon Network (USDT)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewAddressInput(savedAddress);
+                  setIsEditingAddress(true);
+                }}
+                className="text-[#4ADE80] hover:underline font-bold cursor-pointer"
+              >
+                Change Address
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* System Error / Success Alerts */}

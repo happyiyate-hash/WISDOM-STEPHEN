@@ -30,7 +30,16 @@ import {
   RefreshCw,
   Sparkles,
   Check,
+  Code,
+  Copy,
 } from 'lucide-react';
+import {
+  generateLoginVerificationHtml,
+  generateForgotPasswordHtml,
+  generateSecurityAlertHtml,
+  generateInvitationHtml,
+  generateOtpEmailHtml,
+} from '../lib/emailTemplates';
 import {
   SupabaseUserProfile,
   updateUserProfile,
@@ -61,10 +70,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const signOutHandler = onSignOut || handleSignOut;
 
   const [username, setUsername] = useState(
-    userProfile?.username || currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0] || 'Wisdom'
+    userProfile?.username || currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0] || ''
   );
   const [displayName, setDisplayName] = useState(
-    userProfile?.display_name || currentUser?.user_metadata?.full_name || 'Wisdom'
+    userProfile?.display_name || currentUser?.user_metadata?.full_name || ''
   );
   const [avatarUrl, setAvatarUrl] = useState(
     userProfile?.avatar_url || currentUser?.user_metadata?.avatar_url || ''
@@ -95,10 +104,47 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Email Template Preview Modal
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpTab, setOtpTab] = useState<'preview' | 'code'>('preview');
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [testOtpCode, setTestOtpCode] = useState('842915');
+  const [emailTemplateType, setEmailTemplateType] = useState<'login' | 'forgot' | 'security' | 'invite'>('login');
+
+  const getActiveTemplateHtml = () => {
+    const common = {
+      userName: displayName || username || 'TokenCare User',
+      userEmail: email,
+      code: testOtpCode || '842915',
+    };
+
+    switch (emailTemplateType) {
+      case 'login':
+        return generateLoginVerificationHtml(common);
+      case 'forgot':
+        return generateForgotPasswordHtml(common);
+      case 'security':
+        return generateSecurityAlertHtml({
+          ...common,
+          alertType: 'NEW_LOGIN',
+          location: 'Benin City, Nigeria',
+          deviceInfo: 'Chrome on Windows 11',
+        });
+      case 'invite':
+        return generateInvitationHtml({
+          ...common,
+          inviterName: displayName || username || 'TokenCare Member',
+          inviteCode: `CARE-${testOtpCode || '842915'}`,
+        });
+      default:
+        return generateOtpEmailHtml(common);
+    }
+  };
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const email = currentUser?.email || userProfile?.email || 'goodlucksteven676@gmail.com';
-  const userId = currentUser?.id || userProfile?.id || 'anon-user-id';
+  const email = currentUser?.email || userProfile?.email || '';
+  const userId = currentUser?.id || userProfile?.id || '';
 
   // Load saved withdrawal address on mount
   useEffect(() => {
@@ -139,6 +185,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const res = await saveUserWithdrawalAddress(userId, clean);
       if (res.success && res.address) {
         setSavedAddress(res.address);
+        if (userProfile && onUpdateProfile) {
+          onUpdateProfile({
+            ...userProfile,
+            wallet_address: res.address,
+          });
+        }
         setAddressMessage('✓ Verified on Polygon Blockchain & saved to address table!');
         setTimeout(() => {
           setShowAddressModal(false);
@@ -271,58 +323,63 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="space-y-3.5 text-white font-sans animate-in fade-in duration-200 pb-4 max-w-md mx-auto">
-      {/* 1. Subtitle below top header */}
-      <div className="text-center -mt-1 pb-1">
-        <p className="text-[10.5px] text-zinc-400 font-normal">
-          Manage your account and preferences
-        </p>
-      </div>
-
-      {/* 2. Top Profile Header Card */}
-      <div className="bg-[#0B0E17] border border-[#22C55E]/30 rounded-2xl p-3 shadow-md flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          {/* Avatar circle with online green status badge */}
-          <div className="relative shrink-0">
-            <div className="w-11 h-11 rounded-full bg-zinc-900 border border-[#22C55E]/60 overflow-hidden flex items-center justify-center">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-tr from-[#15803D] via-[#16A34A] to-[#4ADE80] flex items-center justify-center text-black font-extrabold text-sm">
-                  {(displayName || username || 'W').slice(0, 1).toUpperCase()}
-                </div>
-              )}
+    <div className="space-y-3.5 text-white font-sans animate-in fade-in duration-200 pb-4 max-w-md mx-auto min-h-screen flex flex-col -mt-2">
+      {/* STICKY TOP NAVIGATION HEADER FOR SETTINGS PAGE */}
+      <header className="sticky top-0 z-40 bg-[#090C12]/95 backdrop-blur-xl border-b border-[#22C55E]/30 rounded-b-2xl p-2.5 shadow-[0_4px_25px_rgba(0,0,0,0.7)] max-w-md mx-auto w-full transition-all">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2.5">
+            {/* Avatar circle with online green status badge */}
+            <div className="relative shrink-0">
+              <div className="w-10 h-10 rounded-full bg-zinc-900 border border-[#22C55E]/60 overflow-hidden flex items-center justify-center">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-tr from-[#15803D] via-[#16A34A] to-[#4ADE80] flex items-center justify-center text-black font-extrabold text-xs">
+                    {(displayName || username || 'W').slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              {/* Green Online Badge */}
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#22C55E] border-2 border-[#090C12] rounded-full shadow-[0_0_6px_rgba(34,197,94,0.8)]"></span>
             </div>
-            {/* Green Online Badge */}
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#22C55E] border-2 border-[#0B0E17] rounded-full shadow-[0_0_6px_rgba(34,197,94,0.8)]"></span>
+
+            {/* User Info */}
+            <div className="space-y-0.2 min-w-0">
+              <div className="flex items-center space-x-1.5">
+                <h2 className="text-xs font-bold text-white tracking-tight truncate">
+                  {displayName || username || 'Wisdom'}
+                </h2>
+                <span className="inline-flex items-center space-x-0.5 text-[8px] font-bold text-[#4ADE80] bg-[#22C55E]/15 border border-[#22C55E]/40 px-1.5 py-0.2 rounded-full font-mono shrink-0">
+                  <CheckCircle2 className="w-2.5 h-2.5 text-[#22C55E] fill-[#22C55E]/20" />
+                  <span>Verified</span>
+                </span>
+              </div>
+              <div className="text-[9.5px] text-zinc-400 font-mono truncate max-w-[170px]">
+                {email}
+              </div>
+            </div>
           </div>
 
-          {/* User Info */}
-          <div className="space-y-0.5">
-            <h2 className="text-xs font-bold text-white tracking-tight">
-              {displayName || username || 'Wisdom'}
-            </h2>
-            <div className="text-[10px] text-zinc-400 font-mono truncate max-w-[170px]">
-              {email}
-            </div>
-            <div className="pt-0.5">
-              <span className="inline-flex items-center space-x-1 text-[8.5px] font-bold text-[#4ADE80] bg-[#22C55E]/15 border border-[#22C55E]/40 px-2 py-0.2 rounded-full font-mono">
-                <CheckCircle2 className="w-2.5 h-2.5 text-[#22C55E] fill-[#22C55E]/20" />
-                <span>Verified Account</span>
-              </span>
-            </div>
-          </div>
+          {/* Right Green Outline Edit Profile Button */}
+          <button
+            type="button"
+            onClick={() => setShowEditProfile(true)}
+            className="px-2.5 py-1.5 bg-[#22C55E]/15 hover:bg-[#22C55E]/25 border border-[#22C55E]/40 text-[#4ADE80] text-[10px] font-bold rounded-xl flex items-center space-x-1 transition-all cursor-pointer shrink-0 active:scale-95 shadow-[0_2px_10px_rgba(34,197,94,0.15)]"
+          >
+            <Pencil className="w-3 h-3 text-[#4ADE80]" />
+            <span>Edit Profile</span>
+          </button>
         </div>
+      </header>
 
-        {/* Right Green Outline Edit Profile Button */}
-        <button
-          onClick={() => setShowEditProfile(true)}
-          className="px-2.5 py-1.5 bg-[#22C55E]/15 hover:bg-[#22C55E]/25 border border-[#22C55E]/40 text-[#4ADE80] text-[10.5px] font-semibold rounded-xl flex items-center space-x-1 transition-all cursor-pointer shrink-0 active:scale-95 shadow-[0_2px_10px_rgba(34,197,94,0.15)]"
-        >
-          <Pencil className="w-3 h-3 text-[#4ADE80]" />
-          <span>Edit Profile</span>
-        </button>
-      </div>
+      {/* BODY CONTENT BELOW HEADER */}
+      <div className="px-3 space-y-3 flex-1">
+        {/* 1. Subtitle */}
+        <div className="text-center pt-1">
+          <p className="text-[10.5px] text-zinc-400 font-normal">
+            Manage your account and preferences
+          </p>
+        </div>
 
       {/* 3. Section: APPEARANCE */}
       <div className="space-y-1">
@@ -536,6 +593,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <div className="text-[9.5px] text-zinc-400 font-normal">
                   Manage your notification preferences
+                </div>
+              </div>
+            </div>
+
+            <ChevronRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 shrink-0" />
+          </div>
+
+          {/* 6-Digit Verification Email Template */}
+          <div
+            onClick={() => setShowOtpModal(true)}
+            className="p-2.5 flex items-center justify-between hover:bg-zinc-800/30 transition-colors cursor-pointer group"
+          >
+            <div className="flex items-center space-x-2.5">
+              <div className="w-7 h-7 rounded-full bg-[#0E2E21] border border-emerald-500/20 flex items-center justify-center text-[#00E575] shrink-0">
+                <Mail className="w-3.5 h-3.5 text-[#00E575]" />
+              </div>
+              <div>
+                <div className="text-[11.5px] font-bold text-white group-hover:text-emerald-300 transition-colors flex items-center gap-1.5">
+                  <span>Email OTP Template</span>
+                  <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-1.5 rounded font-mono">
+                    HTML
+                  </span>
+                </div>
+                <div className="text-[9.5px] text-zinc-400 font-normal">
+                  View and copy 6-digit verification code email HTML
                 </div>
               </div>
             </div>
@@ -967,6 +1049,174 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* 6-Digit Email OTP HTML Preview Modal */}
+      {showOtpModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-3 animate-in fade-in">
+          <div className="bg-[#0B0E17] border border-[#22C55E]/40 rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-3.5 bg-[#090C12] border-b border-zinc-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-xl bg-[#15803D]/20 border border-[#22C55E]/40 flex items-center justify-center text-[#4ADE80]">
+                  <Mail className="w-4 h-4 text-[#4ADE80]" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>6-Digit Verification Email HTML</span>
+                    <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-1.5 rounded font-mono">
+                      TOKENCARE
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-zinc-400">Professional inline-styled HTML for Supabase/Resend</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowOtpModal(false)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Template Type Selector Row */}
+            <div className="px-3 pt-2 pb-1 bg-zinc-950/80 border-b border-zinc-800/80 flex items-center space-x-1.5 overflow-x-auto no-scrollbar shrink-0">
+              <button
+                type="button"
+                onClick={() => setEmailTemplateType('login')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer ${
+                  emailTemplateType === 'login'
+                    ? 'bg-[#22C55E]/20 text-[#4ADE80] border border-[#22C55E]/50'
+                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-transparent'
+                }`}
+              >
+                🔐 Verify Login (2FA)
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmailTemplateType('forgot')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer ${
+                  emailTemplateType === 'forgot'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
+                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-transparent'
+                }`}
+              >
+                🔑 Forgot Password
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmailTemplateType('security')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer ${
+                  emailTemplateType === 'security'
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50'
+                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-transparent'
+                }`}
+              >
+                🚨 Security Alert
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmailTemplateType('invite')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer ${
+                  emailTemplateType === 'invite'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
+                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-transparent'
+                }`}
+              >
+                🎁 Referral / Invite
+              </button>
+            </div>
+
+            {/* Controls Bar: Tab Switcher + Test Code Input + Copy Button */}
+            <div className="p-2.5 bg-zinc-950 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              {/* Tab Selector */}
+              <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setOtpTab('preview')}
+                  className={`px-3 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer ${
+                    otpTab === 'preview'
+                      ? 'bg-[#22C55E] text-black shadow-md'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Live Preview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOtpTab('code')}
+                  className={`px-3 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    otpTab === 'code'
+                      ? 'bg-[#22C55E] text-black shadow-md'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Code className="w-3 h-3" />
+                  <span>HTML Source</span>
+                </button>
+              </div>
+
+              {/* Sample Code Input */}
+              <div className="flex items-center space-x-1.5 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded-xl">
+                <span className="text-[9px] text-zinc-400 font-mono">OTP:</span>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={testOtpCode}
+                  onChange={(e) => setTestOtpCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-16 bg-transparent text-emerald-400 font-mono font-bold text-xs focus:outline-none"
+                  placeholder="842915"
+                />
+              </div>
+
+              {/* Copy HTML Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  const html = getActiveTemplateHtml();
+                  navigator.clipboard.writeText(html);
+                  setCopiedCode(true);
+                  setTimeout(() => setCopiedCode(false), 2000);
+                }}
+                className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-black text-[10.5px] font-black rounded-xl flex items-center space-x-1.5 cursor-pointer shadow-md transition-all active:scale-95"
+              >
+                {copiedCode ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-black" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-black" />
+                    <span>Copy HTML</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Modal Body: Preview vs HTML Code */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {otpTab === 'preview' ? (
+                <div className="w-full bg-[#06080E] border border-zinc-800 rounded-xl overflow-hidden min-h-[380px]">
+                  <iframe
+                    title="OTP Email Preview"
+                    srcDoc={getActiveTemplateHtml()}
+                    className="w-full h-[420px] border-0"
+                  />
+                </div>
+              ) : (
+                <div className="relative bg-zinc-950 border border-zinc-800 rounded-xl p-3">
+                  <pre className="text-[10px] text-emerald-300 font-mono whitespace-pre-wrap break-all max-h-[380px] overflow-y-auto select-all">
+                    {getActiveTemplateHtml()}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
     </div>
   );
 };

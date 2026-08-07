@@ -29,38 +29,39 @@ export const ToastNotification: React.FC<ToastProps> = ({
   if (!message) return null;
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-sm w-[92vw] sm:w-96 animate-in slide-in-from-top-6 fade-in duration-300 pointer-events-auto shadow-2xl">
-      <div className="bg-[#0B0F19]/95 border border-emerald-500/40 backdrop-blur-xl shadow-[0_12px_40px_rgba(16,185,129,0.25)] rounded-2xl p-3.5 text-white flex items-start space-x-3 relative overflow-hidden">
-        {/* Glow ambient circle */}
-        <div className="absolute -top-10 -left-10 w-24 h-24 bg-emerald-500/20 rounded-full blur-2xl pointer-events-none" />
+    <div className="fixed top-0 inset-x-0 z-50 w-full animate-in slide-in-from-top-full duration-300 pointer-events-auto shadow-2xl">
+      <div className="bg-[#090C12]/98 border-b border-emerald-500/50 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] px-4 py-3 text-white flex items-center justify-between w-full relative overflow-hidden">
+        {/* Subtle ambient accent background glow */}
+        <div className="absolute inset-y-0 left-0 w-2 bg-[#22C55E]" />
 
-        {/* Icon */}
-        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
-          {type === 'success' ? (
-            <Sparkles className="w-4 h-4 fill-emerald-400/20" />
-          ) : (
-            <AlertCircle className="w-4 h-4 text-rose-400" />
-          )}
-        </div>
+        {/* Content Container */}
+        <div className="flex items-center space-x-3 min-w-0 flex-1 pl-2 pr-4">
+          {/* Icon */}
+          <div className="w-7 h-7 rounded-lg bg-[#22C55E]/20 border border-[#22C55E]/40 flex items-center justify-center text-[#4ADE80] shrink-0">
+            {type === 'success' ? (
+              <Sparkles className="w-3.5 h-3.5 text-[#4ADE80]" />
+            ) : (
+              <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+            )}
+          </div>
 
-        {/* Text Body */}
-        <div className="flex-1 min-w-0 pr-6">
-          <h4 className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider">
-            {type === 'success' ? 'Token Saved' : 'Notification'}
-          </h4>
-          <p className="text-xs text-zinc-200 mt-0.5 leading-snug font-medium">
-            {message}
-          </p>
+          {/* Text message */}
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-zinc-100 truncate">
+              {message}
+            </p>
+          </div>
 
+          {/* Action button if provided */}
           {onAction && actionText && (
             <button
               onClick={() => {
                 onAction();
                 onClose();
               }}
-              className="mt-2 text-[10px] bg-emerald-500 hover:bg-emerald-400 text-black px-2.5 py-1 rounded-lg font-bold transition-all shadow-md cursor-pointer inline-flex items-center space-x-1"
+              className="text-[10px] bg-[#22C55E] hover:bg-emerald-400 text-black px-2.5 py-1 rounded-lg font-extrabold transition-all cursor-pointer shrink-0 uppercase tracking-wider"
             >
-              <span>{actionText}</span>
+              {actionText}
             </button>
           )}
         </div>
@@ -68,9 +69,10 @@ export const ToastNotification: React.FC<ToastProps> = ({
         {/* Dismiss button */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 text-zinc-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+          className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer shrink-0"
+          title="Dismiss notification"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
     </div>
