@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { TOKENCARE_LOGO_URL } from '../constants/logo';
 import {
   ShieldCheck,
   Lock,
@@ -353,7 +354,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
         {/* Branding Logo */}
         <div className="flex flex-col items-center text-center space-y-2">
           <img
-            src="/icons/tokencare-logo.png"
+            src={TOKENCARE_LOGO_URL}
             alt="TokenCare Logo"
             className="w-16 h-16 rounded-2xl object-cover shadow-xl shadow-emerald-500/30 border border-emerald-500/20"
             referrerPolicy="no-referrer"

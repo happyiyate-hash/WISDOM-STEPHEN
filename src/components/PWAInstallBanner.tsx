@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Download, X, Sparkles, CheckCircle2 } from 'lucide-react';
+import { TOKENCARE_LOGO_URL } from '../constants/logo';
 
 export const PWAInstallBanner: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -51,7 +52,7 @@ export const PWAInstallBanner: React.FC = () => {
     <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-md z-50 bg-[#0E121E]/95 border border-emerald-500/30 rounded-2xl p-4 shadow-2xl shadow-emerald-500/10 backdrop-blur-md flex items-center justify-between gap-3 animate-slide-up">
       <div className="flex items-center space-x-3 min-w-0">
         <img
-          src="/icons/tokencare-logo.png"
+          src={TOKENCARE_LOGO_URL}
           alt="TokenCare"
           className="w-11 h-11 rounded-xl object-cover border border-emerald-500/30 shadow-md shrink-0"
           referrerPolicy="no-referrer"

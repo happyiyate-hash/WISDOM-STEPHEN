@@ -1,4 +1,5 @@
 import React from 'react';
+import { TOKENCARE_LOGO_URL } from '../constants/logo';
 
 interface TokenCareLogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -33,9 +34,10 @@ export const TokenCareLogo: React.FC<TokenCareLogoProps> = ({
         {/* Badge Container */}
         <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-lg">
           <img
-            src="/icons/android-chrome-192x192.png"
+            src={TOKENCARE_LOGO_URL}
             alt="TokenCare Shield"
             className="w-full h-full object-contain"
+            referrerPolicy="no-referrer"
           />
         </div>
       </div>
@@ -52,4 +54,3 @@ export const TokenCareLogo: React.FC<TokenCareLogoProps> = ({
     </div>
   );
 };
-

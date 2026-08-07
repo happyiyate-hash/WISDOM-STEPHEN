@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { TOKENCARE_LOGO_URL } from './constants/logo';
 import confetti from 'canvas-confetti';
 import {
   Menu,
@@ -621,7 +622,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-[#07090E] flex flex-col items-center justify-center p-4">
         <img
-          src="/icons/tokencare-logo.png"
+          src={TOKENCARE_LOGO_URL}
           alt="TokenCare Logo"
           className="w-16 h-16 rounded-2xl object-cover shadow-2xl shadow-emerald-500/30 border border-emerald-500/20 animate-pulse mb-4"
           referrerPolicy="no-referrer"
