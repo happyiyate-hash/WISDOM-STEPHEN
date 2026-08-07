@@ -325,7 +325,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   return (
     <div className="space-y-3.5 text-white font-sans animate-in fade-in duration-200 pb-4 max-w-md mx-auto min-h-screen flex flex-col -mt-2">
       {/* STICKY TOP NAVIGATION HEADER FOR SETTINGS PAGE */}
-      <header className="sticky top-0 z-40 bg-[#090C12] backdrop-blur-xl border-b border-[#22C55E]/30 rounded-b-2xl p-2.5 pt-safe-nav shadow-[0_4px_25px_rgba(0,0,0,0.7)] max-w-md mx-auto w-full transition-all">
+      <header className="sticky top-0 z-40 bg-[#090C12] backdrop-blur-xl border-b border-emerald-500/30 rounded-b-2xl p-2.5 pt-safe-nav shadow-[0_4px_25px_rgba(0,0,0,0.7)] max-w-md mx-auto w-full transition-all">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
             {/* Avatar circle with online green status badge */}

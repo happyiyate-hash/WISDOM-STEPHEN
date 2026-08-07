@@ -230,13 +230,13 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
 
   return (
     /* FIXED FULL SCREEN OVERLAY: Own Layout, completely non-scrolling viewport */
-    <div className="fixed inset-0 z-[100] w-full h-full bg-[#06080E] text-white flex flex-col justify-between p-4 sm:p-6 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] overflow-hidden select-none animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[100] w-full h-full bg-[#06080E] text-white flex flex-col justify-between p-0 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] overflow-y-auto select-none animate-in fade-in duration-300">
       
       {/* TOP SECTION: CUSTOM PAGE NAVIGATION & INPUT CARDS */}
       <div className="w-full max-w-md mx-auto space-y-4">
         
-        {/* 1. CUSTOM TOP NAVIGATION FOR SEND PAGE (Compact Height) */}
-        <header className="flex items-center justify-between pt-1 pb-1.5 border-b border-zinc-800/80">
+        {/* 1. STICKY TOP NAVIGATION HEADER FOR WITHDRAWAL/SEND PAGE */}
+        <header className="sticky top-0 z-40 bg-[#090C12] backdrop-blur-xl border-b border-emerald-500/30 rounded-b-2xl p-2.5 pt-safe-nav shadow-[0_4px_25px_rgba(0,0,0,0.7)] max-w-md mx-auto w-full transition-all flex items-center justify-between">
           <button
             type="button"
             onClick={onBack}
@@ -265,6 +265,8 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
             </span>
           </div>
         </header>
+
+        <div className="px-4 space-y-4">
 
         {/* 2. SAVED PAYOUT ADDRESS CARD (Auto-fetched from database with inline Add/Edit) */}
         <div className="bg-[#0D111A] border border-[#22C55E]/30 rounded-2xl p-3.5 space-y-2.5 text-xs shadow-md">
@@ -472,9 +474,10 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
           <span>Secured by TokenCare DB Payout System</span>
         </div>
       </div>
+    </div>
 
       {/* BOTTOM SECTION: LONG FULL-WIDTH BUTTON DRAGGED TO THE VERY BOTTOM */}
-      <div className="w-full max-w-md mx-auto pb-2 sm:pb-3">
+      <div className="w-full max-w-md mx-auto px-4 pb-2 sm:pb-3">
         <button
           type="button"
           onClick={executeWithdrawal}

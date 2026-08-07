@@ -139,7 +139,7 @@ export const MyTokensView: React.FC<MyTokensViewProps> = ({
   return (
     <div className="space-y-3.5 text-white font-sans animate-in fade-in duration-200 pb-2 -mt-2 min-h-screen flex flex-col">
       {/* STICKY TOP NAVIGATION HEADER FOR MY TOKENS PAGE */}
-      <header className="sticky top-0 z-40 bg-[#090C12] backdrop-blur-xl border-b border-[#22C55E]/30 rounded-b-2xl p-2.5 pt-safe-nav shadow-[0_4px_25px_rgba(0,0,0,0.7)] max-w-md mx-auto w-full transition-all">
+      <header className="sticky top-0 z-40 bg-[#090C12] backdrop-blur-xl border-b border-emerald-500/30 rounded-b-2xl p-2.5 pt-safe-nav shadow-[0_4px_25px_rgba(0,0,0,0.7)] max-w-md mx-auto w-full transition-all">
         <div className="flex items-center justify-between">
           {/* Left Metric: Icon + Total Tokens Added */}
           <div className="flex items-center space-x-2">
